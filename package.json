@@ -1,0 +1,25 @@
+{
+  "name": "sunice",
+  "version": "1.0.0",
+  "description": "",
+  "homepage": "https://github.com/SuniceTop/Sunice#readme",
+  "bugs": {
+    "url": "https://github.com/SuniceTop/Sunice/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SuniceTop/Sunice.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "HOST=${HOST:-127.0.0.1}; PORT=3000; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Freeing port $PORT: terminating $pids\"; kill $pids 2>/dev/null || true; sleep 1; pids=$(lsof -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null); if [ -n \"$pids\" ]; then echo \"Port $PORT still busy: killing $pids\"; kill -9 $pids 2>/dev/null || true; fi; fi; bun *.html pages/*.html pages/*/index.html --host=$HOST:$PORT",
+    "start:lan": "HOST=0.0.0.0 bun run start"
+  },
+  "dependencies": {
+    "@chenglou/pretext": "^0.0.3"
+  }
+}

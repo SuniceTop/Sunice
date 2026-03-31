@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Editorial Engine — pretext 文字环绕演示</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+
+    html, body {
+      background: radial-gradient(ellipse at 50% 40%, #0f0f14 0%, #0a0a0c 100%);
+      color: #e8e4dc;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    }
+
+    /* 舞台：所有元素绝对定位于此 */
+    #stage {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* 每一行正文 */
+    .line {
+      position: absolute;
+      white-space: pre;    /* 保留空格，不自动换行——pretext 已经算好了 */
+      color: #e8e4dc;
+      z-index: 1;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* 标题行 */
+    .headline-line {
+      position: absolute;
+      white-space: pre;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      z-index: 2;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    /* 首字下沉 */
+    .drop-cap {
+      position: absolute;
+      font-weight: 700;
+      color: #c4a35a;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* 发光球体 */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 10;
+      will-change: left, top; /* 告诉浏览器只有位置会变 */
+    }
+
+    /* 操作提示 */
+    .hint {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font: 400 13px/1 "Helvetica Neue", Arial, sans-serif;
+      color: rgba(255,255,255,0.22);
+      background: rgba(0,0,0,0.45);
+      padding: 8px 18px;
+      border-radius: 999px;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 100;
+    }
+
+    /* 角标 */
+    .credit {
+      position: fixed;
+      right: 16px;
+      bottom: 12px;
+      font: 400 11px/1 "Helvetica Neue", Arial, sans-serif;
+      color: rgba(255,255,255,0.25);
+      z-index: 100;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="hint">拖动彩球 · 点击暂停 · Zero DOM reads</div>
+  <span class="credit">pretext editorial engine demo</span>
+
+  <!--
+    type="module" 让浏览器把这个文件当 ES Module 处理，
+    允许顶层 await（等字体加载完再布局）
+  -->
+  <script type="module" src="./editorial-engine.js"></script>
+</body>
+</html>

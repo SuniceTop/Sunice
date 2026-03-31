@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pretext Demo — 无 DOM 重排的文本测量</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f0f13;
+      --surface: #1a1a22;
+      --surface2: #22222e;
+      --border: #2e2e3e;
+      --accent: #7c6cff;
+      --accent2: #56cfba;
+      --text: #e8e8f0;
+      --text-muted: #888899;
+      --green: #4ade80;
+      --red: #f87171;
+      --yellow: #fbbf24;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ─── header ─── */
+    header {
+      padding: 40px 48px 32px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.3px; }
+    .tagline { color: var(--text-muted); font-size: 14px; margin-top: 4px; }
+    .tagline strong { color: var(--accent2); }
+
+    /* ─── layout ─── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+
+    /* ─── section ─── */
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .section-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .section-desc {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 24px;
+      max-width: 580px;
+    }
+
+    /* ─── card ─── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .card-body { padding: 24px; }
+
+    /* ─── badge ─── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 10px;
+      border-radius: 100px;
+      background: color-mix(in srgb, var(--accent) 15%, transparent);
+      color: var(--accent);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+    }
+    .badge.green {
+      background: color-mix(in srgb, var(--green) 12%, transparent);
+      color: var(--green);
+      border-color: color-mix(in srgb, var(--green) 25%, transparent);
+    }
+    .badge.yellow {
+      background: color-mix(in srgb, var(--yellow) 12%, transparent);
+      color: var(--yellow);
+      border-color: color-mix(in srgb, var(--yellow) 25%, transparent);
+    }
+
+    /* ─── DEMO 1: Height predictor ─── */
+    .demo1-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 700px) { .demo1-grid { grid-template-columns: 1fr; } }
+
+    .input-group { display: flex; flex-direction: column; gap: 6px; }
+    .input-group label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    textarea, input[type=range] {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      padding: 10px 12px;
+      resize: vertical;
+      outline: none;
+      transition: border-color .15s;
+      width: 100%;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea { min-height: 100px; }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .slider-row input[type=range] {
+      padding: 0;
+      height: 4px;
+      appearance: none;
+      border-radius: 2px;
+      background: var(--border);
+      cursor: pointer;
+    }
+    .slider-row input[type=range]::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .slider-val {
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 600;
+      min-width: 48px;
+      text-align: right;
+    }
+
+    .result-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .result-key { font-size: 13px; color: var(--text-muted); }
+    .result-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--accent2);
+      font-variant-numeric: tabular-nums;
+    }
+    .result-val.reflow {
+      color: var(--red);
+      text-decoration: line-through;
+      opacity: .7;
+    }
+    .vs-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 14px;
+      margin-top: 2px;
+    }
+    .vs-item { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .vs-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; }
+    .vs-time { font-size: 15px; font-weight: 600; }
+    .vs-time.fast { color: var(--green); }
+    .vs-time.slow { color: var(--red); }
+    .vs-divider { width: 1px; height: 32px; background: var(--border); }
+
+    /* preview box */
+    .text-preview-wrap {
+      position: relative;
+    }
+    #text-preview-box {
+      background: var(--surface2);
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      white-space: normal;
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 40px;
+      transition: all .2s;
+      position: relative;
+    }
+    .height-indicator {
+      position: absolute;
+      right: -40px;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .height-indicator .line { width: 1px; flex: 1; background: var(--accent); opacity: .5; }
+    .height-indicator .arrow-label {
+      font-size: 10px;
+      color: var(--accent);
+      writing-mode: vertical-rl;
+      white-space: nowrap;
+      opacity: .8;
+    }
+
+    /* ─── DEMO 2: Bubble shrink-wrap ─── */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 20px;
+      background: var(--surface2);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .chat-msg {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    .chat-msg.me { flex-direction: row-reverse; }
+    .avatar {
+      width: 28px; height: 28px;
+      border-radius: 50%;
+      font-size: 14px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .bubble {
+      padding: 8px 13px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.5;
+      max-width: 70%;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      position: relative;
+      transition: width .2s ease;
+    }
+    .bubble.other {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble.me {
+      background: linear-gradient(135deg, var(--accent), #5a50e0);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bubble-slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0 0;
+    }
+    .bubble-slider-row label { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+
+    .shrink-stats {
+      display: flex;
+      gap: 20px;
+      padding: 12px 0 0;
+    }
+    .shrink-stat {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .shrink-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .8px; }
+    .shrink-stat-val { font-size: 18px; font-weight: 700; color: var(--accent2); font-variant-numeric: tabular-nums; }
+
+    /* ─── DEMO 3: Resize hot path ─── */
+    .perf-demo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    @media (max-width: 700px) { .perf-demo { grid-template-columns: 1fr; } }
+
+    .perf-panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .perf-panel-header {
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .perf-panel-body { padding: 14px; }
+    .fake-card {
+      background: var(--surface2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      word-break: break-word;
+      overflow-wrap: break-word;
+    }
+    .perf-resize-slider {
+      margin-bottom: 16px;
+    }
+    .perf-counter {
+      font-size: 12px;
+      color: var(--text-muted);
+      text-align: center;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .perf-counter span { color: var(--accent2); font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ─── code block ─── */
+    .code-block {
+      background: #0d0d11;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      font-family: "JetBrains Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+      color: #cdd6f4;
+    }
+    .c-keyword { color: #cba6f7; }
+    .c-fn { color: #89b4fa; }
+    .c-str { color: #a6e3a1; }
+    .c-comment { color: #585b70; font-style: italic; }
+    .c-num { color: #fab387; }
+    .c-type { color: #f38ba8; }
+
+    /* ─── footer ─── */
+    footer {
+      text-align: center;
+      padding: 32px;
+      color: var(--text-muted);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📐</div>
+    <h1>Pretext Demo</h1>
+  </div>
+  <p class="tagline">
+    <strong>@chenglou/pretext</strong> — 无需 DOM 测量，亚毫秒级文本布局预测
+  </p>
+</header>
+
+<main>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- DEMO 1: Height predictor                              -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-label">Demo 01</div>
+    <div class="section-title">文本高度预测器</div>
+    <div class="section-desc">
+      输入任意文字，调整容器宽度，<code>layout()</code> 在 <strong>不触碰 DOM</strong> 的情况下即时给出精确高度。
+      拖动滑块就是传统方案中每帧都要触发的 <code>getBoundingClientRect</code>，而 pretext 直接绕过了它。
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="demo1-grid">
+          <!-- left: inputs -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="input-group">
+              <label>输入文本（支持中文 / 英文 / Emoji / 阿拉伯文混排）</label>
+              <textarea id="d1-text" rows="4">AGI 春天到了 🌸 بدأت الرحلة 🚀 — This library predicts multiline text height without ever reading the DOM, making resize animations buttery smooth.</textarea>
+            </div>
+            <div class="input-group">
+              <label>字体</label>
+              <select id="d1-font" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;cursor:pointer;">
+                <option value="15px Inter, PingFang SC, sans-serif">Inter / PingFang SC — 15px</option>
+                <option value="14px Inter, PingFang SC, sans-serif">Inter / PingFang SC — 14px</option>
+                <option value="18px Georgia, serif">Georgia — 18px</option>
+                <option value="13px Menlo, monospace">Menlo Monospace — 13px</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>容器宽度</label>
+              <div class="slider-row">
+                <input type="range" id="d1-width" min="120" max="700" value="360">
+                <span class="slider-val" id="d1-width-val">360px</span>
+              </div>
+            </div>
+            <div class="input-group">
+              <label>行高 (lineHeight px)</label>
+              <div class="slider-row">
+                <input type="range" id="d1-lh" min="16" max="40" value="24">
+                <span class="slider-val" id="d1-lh-val">24px</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- right: results -->
+          <div style="display:flex;flex-direction:column;gap:16px;">
+            <div class="result-box">
+              <div class="result-row">
+                <span class="result-key">预测高度 (pretext)</span>
+                <span class="result-val" id="d1-height">—</span>
+              </div>
+              <div class="result-row">
+                <span class="result-key">行数</span>
+                <span class="result-val" id="d1-lines">—</span>
+              </div>
+              <div class="result-row">
+                <span class="result-key">实际 DOM 高度（对照）</span>
+                <span class="result-val" id="d1-dom-height" style="color:var(--text-muted);font-size:14px;">—</span>
+              </div>
+              <div class="vs-row">
+                <div class="vs-item">
+                  <span class="vs-label">layout() 耗时</span>
+                  <span class="vs-time fast" id="d1-layout-time">—</span>
+                </div>
+                <div class="vs-divider"></div>
+                <div class="vs-item">
+                  <span class="vs-label">DOM reflow 耗时</span>
+                  <span class="vs-time slow" id="d1-dom-time">—</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- hidden DOM measurement element -->
+            <div style="position:relative;">
+              <div id="text-preview-box"></div>
+            </div>
+            <p style="font-size:12px;color:var(--text-muted);">↑ 这个 div 仅用于"对照"测量，pretext 本身不需要它</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- code snippet -->
+    <div class="code-block" style="margin-top:16px;"><span class="c-keyword">import</span> { prepare, layout } <span class="c-keyword">from</span> <span class="c-str">'@chenglou/pretext'</span>
+
+<span class="c-comment">// ① 准备阶段（只做一次，~几毫秒）</span>
+<span class="c-keyword">const</span> prepared = <span class="c-fn">prepare</span>(text, <span class="c-str">'15px Inter, PingFang SC, sans-serif'</span>)
+
+<span class="c-comment">// ② 布局阶段（纯算术，~0.09ms，可在 resize 热路径中反复调用）</span>
+<span class="c-keyword">const</span> { height, lineCount } = <span class="c-fn">layout</span>(prepared, maxWidth, lineHeight)
+<span class="c-comment">// ↑ 全程零 DOM 读取，不触发任何 reflow！</span></div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- DEMO 2: Chat bubble shrink-wrap                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-label">Demo 02</div>
+    <div class="section-title">聊天气泡收缩包裹</div>
+    <div class="section-desc">
+      CSS 无法知道一段文本"最宽需要多少像素才能单行显示"。pretext 的 <code>walkLineRanges()</code>
+      用二分法找到恰好不换行的最小宽度，让气泡不浪费一个像素的空白。
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="bubble-slider-row">
+          <label>最大气泡宽度</label>
+          <input type="range" id="d2-maxw" min="120" max="500" value="260" style="flex:1;">
+          <span class="slider-val" id="d2-maxw-val">260px</span>
+        </div>
+
+        <div style="height:16px;"></div>
+
+        <div class="chat-container" id="d2-chat">
+          <!-- JS will render -->
+        </div>
+
+        <div class="shrink-stats">
+          <div class="shrink-stat">
+            <span class="shrink-stat-label">收缩前平均宽度</span>
+            <span class="shrink-stat-val" id="d2-before">—</span>
+          </div>
+          <div class="shrink-stat">
+            <span class="shrink-stat-label">收缩后平均宽度</span>
+            <span class="shrink-stat-val" id="d2-after">—</span>
+          </div>
+          <div class="shrink-stat">
+            <span class="shrink-stat-label">节省空白</span>
+            <span class="shrink-stat-val" id="d2-saved" style="color:var(--green);">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-block" style="margin-top:16px;"><span class="c-keyword">import</span> { prepareWithSegments, walkLineRanges } <span class="c-keyword">from</span> <span class="c-str">'@chenglou/pretext'</span>
+
+<span class="c-comment">// 用 walkLineRanges 二分搜索"最小合适宽度"</span>
+<span class="c-keyword">function</span> <span class="c-fn">shrinkWrap</span>(prepared, maxWidth) {
+  <span class="c-keyword">let</span> lo = <span class="c-num">0</span>, hi = maxWidth
+  <span class="c-keyword">while</span> (hi - lo > <span class="c-num">1</span>) {
+    <span class="c-keyword">const</span> mid = (lo + hi) >> <span class="c-num">1</span>
+    <span class="c-keyword">let</span> lines = <span class="c-num">0</span>
+    <span class="c-fn">walkLineRanges</span>(prepared, mid, () => lines++)
+    lines === <span class="c-num">1</span> ? (hi = mid) : (lo = mid)   <span class="c-comment">// 继续收缩</span>
+  }
+  <span class="c-keyword">return</span> hi
+}</div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- DEMO 3: Resize hot path comparison                    -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <section>
+    <div class="section-label">Demo 03</div>
+    <div class="section-title">Resize 热路径性能对比</div>
+    <div class="section-desc">
+      拖动滑块模拟窗口缩放，左侧用 <code>pretext layout()</code>（纯算术），右侧用传统 <code>offsetHeight</code>（触发 DOM reflow）。
+      计数器显示各自触发了多少次重排。
+    </div>
+
+    <div class="card">
+      <div class="card-body">
+        <div class="perf-resize-slider">
+          <div class="slider-row">
+            <input type="range" id="d3-width" min="100" max="500" value="300">
+            <span class="slider-val" id="d3-width-val">300px</span>
+          </div>
+        </div>
+
+        <div class="perf-demo">
+          <!-- Pretext -->
+          <div class="perf-panel">
+            <div class="perf-panel-header">
+              <span>⚡ Pretext layout()</span>
+              <span class="badge green">零 Reflow</span>
+            </div>
+            <div class="perf-panel-body" id="d3-pretext-body">
+              <!-- cards -->
+            </div>
+            <div class="perf-counter">
+              Reflow 次数：<span id="d3-pretext-reflow">0</span>
+              &nbsp;|&nbsp;
+              avg layout：<span id="d3-pretext-avg">—</span>
+            </div>
+          </div>
+
+          <!-- DOM -->
+          <div class="perf-panel">
+            <div class="perf-panel-header">
+              <span>🐢 DOM offsetHeight</span>
+              <span class="badge yellow">强制 Reflow</span>
+            </div>
+            <div class="perf-panel-body" id="d3-dom-body">
+              <!-- cards -->
+            </div>
+            <div class="perf-counter">
+              Reflow 次数：<span id="d3-dom-reflow">0</span>
+              &nbsp;|&nbsp;
+              avg DOM read：<span id="d3-dom-avg">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  基于 <a href="https://github.com/chenglou/pretext" target="_blank">chenglou/pretext</a> 构建的 Demo
+  &nbsp;·&nbsp;
+  查看 <a href="https://chenglou.me/pretext/" target="_blank">官方演示</a>
+</footer>
+
+<!-- Hidden DOM measurement div -->
+<div id="dom-measure" style="
+  position:absolute;
+  visibility:hidden;
+  pointer-events:none;
+  top:-9999px;
+  left:0;
+  word-break:break-word;
+  overflow-wrap:break-word;
+  white-space:normal;
+  font-size:15px;
+  line-height:1.6;
+"></div>
+
+<script type="module" src="pretext-demo.js"></script>
+</body>
+</html>
